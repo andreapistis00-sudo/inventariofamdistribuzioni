@@ -1,74 +1,46 @@
-body {
-    font-family: Arial, sans-serif;
-    margin: 0;
-    padding: 0;
-}
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>Inventario Magazzino</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-header {
-    background: #2c3e50;
-    color: white;
-    padding: 1rem;
-    text-align: center;
-}
+    <!-- CSS -->
+    <link rel="stylesheet" href="style.css">
 
-.controls {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    padding: 1rem;
-}
+    <!-- SheetJS (xlsx) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+</head>
+<body>
 
-.controls input[type="file"],
-.controls input[type="text"],
-.controls button {
-    padding: 8px;
-    font-size: 14px;
-}
+<header>
+    <h1>📦 Inventario Magazzino</h1>
+</header>
 
-button {
-    cursor: pointer;
-}
+<section class="controls">
+    <input type="file" id="fileInput" accept=".xlsx">
+    <input type="text" id="searchInput" placeholder="Cerca per SKU o Nome">
+    <button id="exportBtn">⬇️ Esporta Excel</button>
+    <button id="resetBtn" class="danger">🗑 Reset inventario</button>
+</section>
 
-button.danger {
-    background: #c0392b;
-    color: white;
-    border: none;
-}
+<p id="saveStatus">Nessuna modifica</p>
 
-#saveStatus {
-    padding: 0 1rem;
-    font-size: 14px;
-    color: #2c3e50;
-}
+<section class="table-container">
+    <table id="inventoryTable">
+        <thead>
+            <tr>
+                <th>SKU</th>
+                <th>Nome</th>
+                <th>Posizione</th>
+                <th>Giacenza</th>
+                <th>Note</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</section>
 
-.table-container {
-    overflow-x: auto;
-    padding: 1rem;
-}
-
-table {
-    border-collapse: collapse;
-    width: 100%;
-}
-
-th, td {
-    border: 1px solid #ddd;
-    padding: 6px;
-    text-align: left;
-}
-
-th {
-    background: #ecf0f1;
-}
-
-td input {
-    width: 100%;
-    border: none;
-    padding: 4px;
-}
-
-@media (max-width: 600px) {
-    th, td {
-        font-size: 12px;
-    }
-}
+<script src="script.js"></script>
+</body>
+</html>
