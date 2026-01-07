@@ -1,3 +1,12 @@
+/* ===========================
+   Inventario Magazzino
+   - Import/Export Excel .xlsx
+   - Cerca prodotto
+   - Aggiungi/Aggiorna
+   - +1 / -1 / modifica / elimina
+   - Salva in LocalStorage
+   =========================== */
+
 const STORAGE_KEY = "inventario_items_v1";
 
 const el = (id) => document.getElementById(id);
@@ -20,6 +29,8 @@ const btnReset = el("btnReset");
 const rows = el("rows");
 const count = el("count");
 
+/* ===== Storage ===== */
+
 function loadItems() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -35,20 +46,19 @@ function saveItems(items) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
 }
 
+/* ===== Utils ===== */
+
 function normalizeSku(s) {
   return (s ?? "").toString().trim();
 }
-
 function normalizeText(s) {
   return (s ?? "").toString().trim();
 }
-
 function toInt(n) {
   const x = Number(n);
   if (!Number.isFinite(x)) return 0;
   return Math.trunc(x);
 }
-
 function escapeHtml(s) {
   return String(s)
     .replaceAll("&", "&amp;")
@@ -58,12 +68,14 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
+/* ===== Render ===== */
+
 function render() {
   const items = loadItems();
   const q = normalizeText(searchIn.value).toLowerCase();
 
   const filtered = q
-    ? items.filter(it =>
+    ? items.filter((it) =>
         (it.sku || "").toLowerCase().includes(q) ||
         (it.name || "").toLowerCase().includes(q)
       )
@@ -98,6 +110,8 @@ function render() {
   }
 }
 
+/* ===== CRUD ===== */
+
 function upsertItem(newItem) {
   const items = loadItems();
 
@@ -113,7 +127,7 @@ function upsertItem(newItem) {
     return;
   }
 
-  const idx = items.findIndex(it => normalizeSku(it.sku) === sku);
+  const idx = items.findIndex((it) => normalizeSku(it.sku) === sku);
 
   const payload = {
     sku,
@@ -127,16 +141,14 @@ function upsertItem(newItem) {
   if (idx >= 0) items[idx] = { ...items[idx], ...payload };
   else items.push(payload);
 
-  // Ordina per nome
   items.sort((a, b) => (a.name || "").localeCompare(b.name || "", "it"));
-
   saveItems(items);
   render();
 }
 
 function changeQty(sku, delta) {
   const items = loadItems();
-  const idx = items.findIndex(it => normalizeSku(it.sku) === normalizeSku(sku));
+  const idx = items.findIndex((it) => normalizeSku(it.sku) === normalizeSku(sku));
   if (idx < 0) return;
 
   const current = toInt(items[idx].qty);
@@ -151,14 +163,14 @@ function changeQty(sku, delta) {
 
 function deleteItem(sku) {
   const items = loadItems();
-  const next = items.filter(it => normalizeSku(it.sku) !== normalizeSku(sku));
+  const next = items.filter((it) => normalizeSku(it.sku) !== normalizeSku(sku));
   saveItems(next);
   render();
 }
 
 function editItemPrompt(sku) {
   const items = loadItems();
-  const it = items.find(x => normalizeSku(x.sku) === normalizeSku(sku));
+  const it = items.find((x) => normalizeSku(x.sku) === normalizeSku(sku));
   if (!it) return;
 
   const name = prompt("Nome prodotto:", it.name ?? "");
@@ -176,137 +188,111 @@ function editItemPrompt(sku) {
   upsertItem({ sku: it.sku, name, qty, location, notes });
 }
 
-/* ===== CSV Import/Export ===== */
+/* ===== Excel Import/Export (.xlsx) =====
+   Richiede SheetJS (xlsx.full.min.js) caricato in index.html
+*/
 
-// Parser CSV semplice: supporta virgole e doppi apici.
-// Excel di solito esporta bene con questo.
-function parseCSV(text) {
-  const rows = [];
-  let i = 0, field = "", row = [], inQuotes = false;
+async function importExcelFile(file) {
+  try {
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data, { type: "array" });
 
-  const pushField = () => { row.push(field); field = ""; };
-  const pushRow = () => { rows.push(row); row = []; };
-
-  while (i < text.length) {
-    const c = text[i];
-
-    if (inQuotes) {
-      if (c === '"') {
-        if (text[i + 1] === '"') { field += '"'; i += 2; continue; }
-        inQuotes = false; i++; continue;
-      }
-      field += c; i++; continue;
-    } else {
-      if (c === '"') { inQuotes = true; i++; continue; }
-      if (c === ",") { pushField(); i++; continue; }
-      if (c === "\r") { i++; continue; }
-      if (c === "\n") { pushField(); pushRow(); i++; continue; }
-      field += c; i++; continue;
+    const sheetName = workbook.SheetNames[0];
+    if (!sheetName) {
+      alert("Nessun foglio trovato nel file Excel.");
+      return;
     }
-  }
-  // ultimo campo/riga
-  pushField();
-  if (row.length > 1 || (row.length === 1 && row[0] !== "")) pushRow();
 
-  return rows;
-}
+    const sheet = workbook.Sheets[sheetName];
+    const excelRows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
-function toCSV(items) {
-  const headers = ["sku","name","qty","location","notes","updated_at"];
-  const esc = (v) => {
-    const s = (v ?? "").toString();
-    if (s.includes('"') || s.includes(",") || s.includes("\n")) {
-      return `"${s.replaceAll('"','""')}"`;
+    if (!excelRows.length) {
+      alert("File Excel vuoto.");
+      return;
     }
-    return s;
-  };
 
-  const lines = [];
-  lines.push(headers.join(","));
-  for (const it of items) {
-    lines.push([
-      esc(it.sku),
-      esc(it.name),
-      esc(it.qty ?? 0),
-      esc(it.location ?? ""),
-      esc(it.notes ?? ""),
-      esc(it.updated_at ?? ""),
-    ].join(","));
-  }
-  return lines.join("\n");
-}
-
-async function importCSVFile(file) {
-  const text = await file.text();
-  const grid = parseCSV(text);
-
-  if (grid.length < 2) {
-    alert("CSV vuoto o non valido.");
-    return;
-  }
-
-  const headers = grid[0].map(h => normalizeText(h).toLowerCase());
-  const col = (name) => headers.indexOf(name);
-
-  const skuIdx = col("sku");
-  const nameIdx = col("name");
-  const qtyIdx = col("qty");
-  const locationIdx = col("location");
-  const notesIdx = col("notes");
-
-  if (skuIdx < 0 || nameIdx < 0) {
-    alert("CSV deve avere almeno le colonne: sku,name (qty consigliata).");
-    return;
-  }
-
-  const items = loadItems();
-  const bySku = new Map(items.map(it => [normalizeSku(it.sku), it]));
-
-  let imported = 0;
-  let updated = 0;
-
-  for (let r = 1; r < grid.length; r++) {
-    const row = grid[r];
-    const sku = normalizeSku(row[skuIdx]);
-    const name = normalizeText(row[nameIdx]);
-    if (!sku || !name) continue;
-
-    const qty = qtyIdx >= 0 ? toInt(row[qtyIdx]) : 0;
-    const location = locationIdx >= 0 ? normalizeText(row[locationIdx]) : "";
-    const notes = notesIdx >= 0 ? normalizeText(row[notesIdx]) : "";
-
-    const existing = bySku.get(sku);
-    const payload = {
-      sku, name, qty, location, notes,
-      updated_at: new Date().toISOString(),
+    // Normalizza intestazioni attese: sku, name, qty, location, notes
+    // sheet_to_json restituisce oggetti basati sulle intestazioni (case sensitive),
+    // quindi gestiamo varianti possibili (SKU, Name, ecc.)
+    const pick = (obj, key) => {
+      const keys = Object.keys(obj);
+      const found = keys.find(k => k.trim().toLowerCase() === key);
+      return found ? obj[found] : "";
     };
 
-    if (existing) { Object.assign(existing, payload); updated++; }
-    else { items.push(payload); bySku.set(sku, payload); imported++; }
+    const items = loadItems();
+    const bySku = new Map(items.map((it) => [normalizeSku(it.sku), it]));
+
+    let imported = 0;
+    let updated = 0;
+
+    for (const r of excelRows) {
+      const sku = normalizeSku(pick(r, "sku"));
+      const name = normalizeText(pick(r, "name"));
+      if (!sku || !name) continue;
+
+      const payload = {
+        sku,
+        name,
+        qty: toInt(pick(r, "qty")),
+        location: normalizeText(pick(r, "location")),
+        notes: normalizeText(pick(r, "notes")),
+        updated_at: new Date().toISOString(),
+      };
+
+      const existing = bySku.get(sku);
+      if (existing) {
+        Object.assign(existing, payload);
+        updated++;
+      } else {
+        items.push(payload);
+        bySku.set(sku, payload);
+        imported++;
+      }
+    }
+
+    items.sort((a, b) => (a.name || "").localeCompare(b.name || "", "it"));
+    saveItems(items);
+    render();
+
+    alert(`Import completato.\nNuovi: ${imported}\nAggiornati: ${updated}`);
+  } catch (err) {
+    alert("Errore durante l'import: " + (err?.message || String(err)));
   }
-
-  items.sort((a, b) => (a.name || "").localeCompare(b.name || "", "it"));
-  saveItems(items);
-  render();
-
-  alert(`Import completato.\nNuovi: ${imported}\nAggiornati: ${updated}`);
 }
 
-function exportCSV() {
-  const items = loadItems();
-  const csv = toCSV(items);
+function exportExcel() {
+  try {
+    const items = loadItems();
 
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
+    const data = items.map((it) => ({
+      sku: it.sku,
+      name: it.name,
+      qty: it.qty ?? 0,
+      location: it.location ?? "",
+      notes: it.notes ?? "",
+      updated_at: it.updated_at ?? "",
+    }));
 
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "inventario.csv";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+    const worksheet = XLSX.utils.json_to_sheet(data);
 
-  URL.revokeObjectURL(url);
+    // Piccolo miglioramento: larghezza colonne (facoltativo)
+    worksheet["!cols"] = [
+      { wch: 14 }, // sku
+      { wch: 32 }, // name
+      { wch: 8 },  // qty
+      { wch: 14 }, // location
+      { wch: 30 }, // notes
+      { wch: 22 }, // updated_at
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Inventario");
+
+    XLSX.writeFile(workbook, "inventario.xlsx");
+  } catch (err) {
+    alert("Errore durante l'export: " + (err?.message || String(err)));
+  }
 }
 
 /* ===== Eventi UI ===== */
@@ -337,12 +323,12 @@ rows.addEventListener("click", (e) => {
 
 btnImport.addEventListener("click", async () => {
   const file = fileInput.files?.[0];
-  if (!file) return alert("Seleziona un file CSV prima di importare.");
-  await importCSVFile(file);
+  if (!file) return alert("Seleziona un file Excel (.xlsx) prima di importare.");
+  await importExcelFile(file);
   fileInput.value = "";
 });
 
-btnExport.addEventListener("click", exportCSV);
+btnExport.addEventListener("click", exportExcel);
 
 btnClear.addEventListener("click", () => {
   if (!confirm("Sicuro? Cancella tutti i dati salvati su questo browser.")) return;
@@ -351,6 +337,7 @@ btnClear.addEventListener("click", () => {
 });
 
 searchIn.addEventListener("input", render);
+
 btnReset.addEventListener("click", () => {
   searchIn.value = "";
   render();
