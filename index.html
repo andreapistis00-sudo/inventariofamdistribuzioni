@@ -1,104 +1,74 @@
-<!doctype html>
-<html lang="it">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Inventario</title>
-  <link rel="stylesheet" href="./style.css" />
-</head>
-<body>
-  <div class="wrap">
-    <header class="top">
-      <div class="topRow">
-        <div>
-          <h1>Inventario</h1>
-          <p class="muted small">
-            Importa il tuo Excel così com’è • Cerca per Cod. o Descrizione • Inserisci lotto/scadenza/quantità • Export con giacenze
-          </p>
-        </div>
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+}
 
-        <!-- Import/Export (piccolo, usato poco) -->
-        <div class="ioBar">
-          <label class="fileBtn" for="file">Importa</label>
-          <input id="file" type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" />
-          <button id="btnExport" class="mini ghost">Export</button>
-        </div>
-      </div>
-    </header>
+header {
+    background: #2c3e50;
+    color: white;
+    padding: 1rem;
+    text-align: center;
+}
 
-    <section class="card">
-      <div class="searchBlock">
-        <input id="search" class="search" placeholder="Cerca per Cod. o Descrizione..." />
-        <div class="stats">
-          <span id="count" class="muted small"></span>
-          <span id="status" class="muted small"></span>
-        </div>
-      </div>
+.controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 1rem;
+}
 
-      <div class="layout">
-        <!-- Lista prodotti -->
-        <div class="listCard">
-          <div class="listHeader">
-            <h2>Prodotti</h2>
-            <p class="muted small">Tocca un prodotto per caricare lotto/scadenza/quantità</p>
-          </div>
-          <div id="list" class="list"></div>
-        </div>
+.controls input[type="file"],
+.controls input[type="text"],
+.controls button {
+    padding: 8px;
+    font-size: 14px;
+}
 
-        <!-- Inserimento -->
-        <div class="formCard">
-          <h2>Carico prodotto</h2>
-          <p class="muted small" id="selectedHint">Seleziona un prodotto dalla lista.</p>
+button {
+    cursor: pointer;
+}
 
-          <div class="selected">
-            <div class="badge" id="selCode">—</div>
-            <div>
-              <div class="selName" id="selDesc">Nessun prodotto selezionato</div>
-              <div class="muted small">
-                Giacenza: <b id="selStock">0</b>
-                <span id="selUm" class="muted small"></span>
-              </div>
-            </div>
-          </div>
+button.danger {
+    background: #c0392b;
+    color: white;
+    border: none;
+}
 
-          <div class="grid">
-            <div>
-              <label>Lotto</label>
-              <input id="lot" placeholder="es. L2026-01" />
-            </div>
-            <div>
-              <label>Scadenza</label>
-              <input id="exp" type="date" />
-            </div>
-          </div>
+#saveStatus {
+    padding: 0 1rem;
+    font-size: 14px;
+    color: #2c3e50;
+}
 
-          <div class="grid">
-            <div>
-              <label>Quantità (carico)</label>
-              <input id="qty" type="number" inputmode="numeric" placeholder="es. 10" />
-            </div>
-            <div>
-              <label>&nbsp;</label>
-              <button id="btnSave" class="primary" disabled>Salva</button>
-            </div>
-          </div>
+.table-container {
+    overflow-x: auto;
+    padding: 1rem;
+}
 
-          <div class="muted small note">
-            Il file Excel resta uguale: usiamo le colonne <code>Cod.</code> e <code>Descrizione</code>.
-            L’export aggiunge solo <code>Giacenza</code> in fondo + foglio <code>Lotti</code>.
-          </div>
+table {
+    border-collapse: collapse;
+    width: 100%;
+}
 
-          <div class="recentWrap">
-            <h3>Ultimi inserimenti</h3>
-            <div id="recent" class="recent"></div>
-          </div>
-        </div>
-      </div>
-    </section>
-  </div>
+th, td {
+    border: 1px solid #ddd;
+    padding: 6px;
+    text-align: left;
+}
 
-  <!-- SheetJS -->
-  <script src="https://unpkg.com/xlsx@0.19.3/dist/xlsx.full.min.js"></script>
+th {
+    background: #ecf0f1;
+}
 
-</body>
-</html>
+td input {
+    width: 100%;
+    border: none;
+    padding: 4px;
+}
+
+@media (max-width: 600px) {
+    th, td {
+        font-size: 12px;
+    }
+}
