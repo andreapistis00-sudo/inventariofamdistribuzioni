@@ -1,34 +1,37 @@
 /* =========================================================
-   Inventario (solo prodotti da file Excel .xlsx)
-   - Importa lista prodotti (.xlsx) -> crea/aggiorna catalogo
-   - NON permette di aggiungere nuovi prodotti dal sito
-   - Cerca prodotto -> seleziona -> inserisci lotto/scadenza/quantità
-   - Aggiorna giacenza (somma qty)
-   - Export .xlsx con 2 fogli:
-       1) Prodotti (giacenze aggiornate)
-       2) Lotti (inserimenti lotto/scadenza/qty/data)
-   - Mobile-first, dati salvati nel browser (LocalStorage)
+   ADEGUATO AL TUO EXCEL (come da screenshot)
+   Colonne usate:
+   - "Cod." (chiave prodotto)
+   - "Descrizione" (testo ricerca/visualizzazione)
+   Altre colonne mantenute e riesportate uguali.
+
+   Workflow:
+   - Import Excel: crea catalogo prodotti dal file (no aggiunte manuali)
+   - Cerca e seleziona
+   - Inserisci: lotto, scadenza, quantità (carico)
+   - Aggiorna Giacenza
+   - Export: stesso file con colonne originali + "Giacenza" (in fondo) + foglio "Lotti"
    ========================================================= */
 
-const STORE_PRODUCTS = "inv_products_v1";
-const STORE_LOTS = "inv_lots_v1";
+const STORE_PRODUCTS = "inv_products_custom_v1";
+const STORE_LOTS = "inv_lots_custom_v1";
 
 const el = (id) => document.getElementById(id);
 
 const fileInput = el("file");
-const btnImport = el("btnImport");
 const btnExport = el("btnExport");
 
 const searchIn = el("search");
-const count = el("count");
+const countEl = el("count");
 const statusEl = el("status");
 
 const listEl = el("list");
 
-const selSkuEl = el("selSku");
-const selNameEl = el("selName");
-const selQtyEl = el("selQty");
-const selectedHint = el("selectedHint");
+const selCodeEl = el("selCode");
+const selDescEl = el("selDesc");
+const selStockEl = el("selStock");
+const selUmEl = el("selUm");
+const selectedHintEl = el("selectedHint");
 
 const lotIn = el("lot");
 const expIn = el("exp");
@@ -37,7 +40,7 @@ const btnSave = el("btnSave");
 
 const recentEl = el("recent");
 
-let selectedSku = null;
+let selectedCode = null;
 
 /* ===== Storage ===== */
 
@@ -73,19 +76,11 @@ function saveLots(lots) {
 
 /* ===== Utils ===== */
 
-function normalizeSku(s) {
-  return (s ?? "").toString().trim();
-}
-function normalizeText(s) {
-  return (s ?? "").toString().trim();
-}
+function norm(s) { return (s ?? "").toString().trim(); }
 function toInt(n) {
   const x = Number(n);
   if (!Number.isFinite(x)) return 0;
   return Math.trunc(x);
-}
-function fmtDateISO(d) {
-  try { return new Date(d).toISOString(); } catch { return new Date().toISOString(); }
 }
 function escapeHtml(s) {
   return String(s)
@@ -95,81 +90,102 @@ function escapeHtml(s) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
+function setStatus(msg) { statusEl.textContent = msg || ""; }
 
-/* ===== UI ===== */
-
-function setStatus(msg) {
-  statusEl.textContent = msg || "";
+/* ===== Excel helpers =====
+   Trova una proprietà dell'oggetto riga, ignorando maiuscole/minuscole e spazi.
+   Esempio: "Cod." potrebbe essere "Cod." o "Cod" o "COD." ecc.
+*/
+function pick(rowObj, wantedHeader) {
+  const target = wantedHeader.trim().toLowerCase();
+  const keys = Object.keys(rowObj);
+  const found = keys.find(k => k.trim().toLowerCase() === target);
+  return found ? rowObj[found] : "";
 }
 
-function setSelected(sku) {
-  selectedSku = sku;
+/* ===== UI render ===== */
+
+function setSelected(code) {
+  selectedCode = code;
   const products = loadProducts();
-  const p = products.find(x => normalizeSku(x.sku) === normalizeSku(sku)) || null;
+  const p = products.find(x => norm(x["Cod."]) === norm(code)) || null;
 
   if (!p) {
-    selSkuEl.textContent = "—";
-    selNameEl.textContent = "Nessun prodotto selezionato";
-    selQtyEl.textContent = "0";
-    selectedHint.textContent = "Seleziona un prodotto dalla lista.";
+    selCodeEl.textContent = "—";
+    selDescEl.textContent = "Nessun prodotto selezionato";
+    selStockEl.textContent = "0";
+    selUmEl.textContent = "";
+    selectedHintEl.textContent = "Seleziona un prodotto dalla lista.";
     btnSave.disabled = true;
     return;
   }
 
-  selSkuEl.textContent = p.sku;
-  selNameEl.textContent = p.name;
-  selQtyEl.textContent = String(p.qty ?? 0);
-  selectedHint.textContent = "Compila lotto, scadenza e quantità, poi salva.";
+  selCodeEl.textContent = p["Cod."] || "—";
+  selDescEl.textContent = p["Descrizione"] || "";
+  selStockEl.textContent = String(p["Giacenza"] ?? 0);
+
+  const um = p["U.m."] || p["U.m"] || p["UM"] || "";
+  selUmEl.textContent = um ? ` • ${um}` : "";
+
+  selectedHintEl.textContent = "Inserisci lotto, scadenza e quantità, poi salva.";
   btnSave.disabled = false;
 
-  // evidenzia selezionato
   for (const node of listEl.querySelectorAll(".item")) {
-    node.classList.toggle("selected", node.dataset.sku === p.sku);
+    node.classList.toggle("selected", node.dataset.code === p["Cod."]);
   }
 }
 
 function renderList() {
   const products = loadProducts();
-  const q = normalizeText(searchIn.value).toLowerCase();
+  const q = norm(searchIn.value).toLowerCase();
 
   const filtered = q
-    ? products.filter(p =>
-        (p.sku || "").toLowerCase().includes(q) ||
-        (p.name || "").toLowerCase().includes(q)
-      )
+    ? products.filter(p => {
+        const code = norm(p["Cod."]).toLowerCase();
+        const desc = norm(p["Descrizione"]).toLowerCase();
+        return code.includes(q) || desc.includes(q);
+      })
     : products;
 
-  count.textContent = products.length
-    ? `${filtered.length} risultati (totale prodotti: ${products.length})`
-    : `Nessun prodotto caricato. Importa un file .xlsx`;
+  countEl.textContent = products.length
+    ? `${filtered.length} risultati (totale: ${products.length})`
+    : `Nessun prodotto caricato. Importa il file Excel.`;
 
   listEl.innerHTML = "";
 
   if (filtered.length === 0) {
-    listEl.innerHTML = `
-      <div class="muted small" style="padding:10px;">
-        ${products.length ? "Nessun risultato." : "Importa un Excel per vedere i prodotti."}
-      </div>`;
+    listEl.innerHTML = `<div class="muted small" style="padding:10px;">
+      ${products.length ? "Nessun risultato." : "Importa un Excel per vedere i prodotti."}
+    </div>`;
     return;
   }
 
   for (const p of filtered) {
+    const code = p["Cod."] || "";
+    const desc = p["Descrizione"] || "";
+    const stock = p["Giacenza"] ?? 0;
+
+    const extra = [];
+    if (p["Categoria"]) extra.push(`Cat: ${p["Categoria"]}`);
+    const um = p["U.m."] || p["U.m"] || "";
+    if (um) extra.push(`UM: ${um}`);
+
     const div = document.createElement("div");
-    div.className = "item" + (selectedSku === p.sku ? " selected" : "");
-    div.dataset.sku = p.sku;
+    div.className = "item" + (selectedCode === code ? " selected" : "");
+    div.dataset.code = code;
 
     div.innerHTML = `
-      <div class="badge">${escapeHtml(p.sku)}</div>
+      <div class="badge">${escapeHtml(code)}</div>
       <div>
-        <div class="itemTitle">${escapeHtml(p.name)}</div>
+        <div class="itemTitle">${escapeHtml(desc)}</div>
         <div class="itemMeta">
-          <span>Giacenza: <b>${p.qty ?? 0}</b></span>
-          ${p.location ? `<span>Pos: ${escapeHtml(p.location)}</span>` : ""}
+          <span>Giacenza: <b>${stock}</b></span>
+          ${extra.length ? `<span>${escapeHtml(extra.join(" • "))}</span>` : ""}
         </div>
       </div>
     `;
 
-    div.addEventListener("click", () => setSelected(p.sku));
+    div.addEventListener("click", () => setSelected(code));
     listEl.appendChild(div);
   }
 }
@@ -177,7 +193,7 @@ function renderList() {
 function renderRecent() {
   const lots = loadLots();
   const products = loadProducts();
-  const mapName = new Map(products.map(p => [p.sku, p.name]));
+  const mapDesc = new Map(products.map(p => [p["Cod."], p["Descrizione"]]));
 
   const last = lots.slice(-8).reverse();
   recentEl.innerHTML = "";
@@ -190,100 +206,110 @@ function renderRecent() {
   for (const r of last) {
     const div = document.createElement("div");
     div.className = "recentRow";
-    const name = mapName.get(r.sku) || "";
+    const desc = mapDesc.get(r.code) || "";
     const exp = r.expiry ? r.expiry : "—";
     div.innerHTML = `
-      <div><b>${escapeHtml(r.sku)}</b> ${escapeHtml(name)}</div>
+      <div><b>${escapeHtml(r.code)}</b> ${escapeHtml(desc)}</div>
       <div class="muted small">Lotto: ${escapeHtml(r.lot || "—")} • Scad: ${escapeHtml(exp)} • Qty: <b>${r.qty}</b></div>
     `;
     recentEl.appendChild(div);
   }
 }
 
-/* ===== Import Excel (.xlsx) =====
-   Atteso: intestazioni nel primo foglio
-   sku, name, qty (opzionale), location (opzionale), notes (opzionale)
-*/
+/* ===== Import Excel (ADEGUATO) ===== */
 
 async function importExcel(file) {
   const data = await file.arrayBuffer();
-  const workbook = XLSX.read(data, { type: "array" });
+  const wb = XLSX.read(data, { type: "array" });
 
-  const sheetName = workbook.SheetNames[0];
-  if (!sheetName) throw new Error("Nessun foglio trovato.");
+  const sheetName = wb.SheetNames[0];
+  if (!sheetName) throw new Error("Nessun foglio trovato nel file.");
 
-  const sheet = workbook.Sheets[sheetName];
+  const sheet = wb.Sheets[sheetName];
   const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
   if (!rows.length) throw new Error("File Excel vuoto.");
 
-  // Supporta intestazioni con maiuscole/minuscole diverse
-  const pick = (obj, key) => {
-    const keys = Object.keys(obj);
-    const found = keys.find(k => k.trim().toLowerCase() === key);
-    return found ? obj[found] : "";
-  };
+  // Validazione: devono esistere "Cod." e "Descrizione" come intestazioni
+  // (le cerchiamo sulla prima riga oggetto)
+  const sample = rows[0];
+  const sampleCode = pick(sample, "Cod.");
+  const sampleDesc = pick(sample, "Descrizione");
 
-  const products = [];
+  // Anche se la prima riga può essere una riga “strana”, controlliamo almeno le chiavi presenti:
+  const keysLower = Object.keys(sample).map(k => k.trim().toLowerCase());
+  const hasCode = keysLower.includes("cod.") || keysLower.includes("cod");
+  const hasDesc = keysLower.includes("descrizione");
+
+  if (!hasCode || !hasDesc) {
+    throw new Error('Intestazioni non trovate. Devono esserci almeno: "Cod." e "Descrizione".');
+  }
+
+  // Prodotti importati: manteniamo TUTTE le colonne originali presenti nel file.
+  // In più aggiungiamo "Giacenza" (se non c’è già) e la gestiamo dal sito.
+  const imported = [];
   const seen = new Set();
 
   for (const r of rows) {
-    const sku = normalizeSku(pick(r, "sku"));
-    const name = normalizeText(pick(r, "name"));
-    if (!sku || !name) continue;
+    const code = norm(pick(r, "Cod."));
+    const desc = norm(pick(r, "Descrizione"));
 
-    if (seen.has(sku)) continue;
-    seen.add(sku);
+    // ignora righe di gruppo / vuote (es: "Produttore :" o righe senza codice/descrizione)
+    if (!code || !desc) continue;
 
-    products.push({
-      sku,
-      name,
-      qty: toInt(pick(r, "qty")),           // se assente -> 0
-      location: normalizeText(pick(r, "location")),
-      notes: normalizeText(pick(r, "notes")),
-      updated_at: new Date().toISOString(),
-    });
+    if (seen.has(code)) continue;
+    seen.add(code);
+
+    // Copia tutte le colonne così come sono
+    const obj = { ...r };
+
+    // Normalizza i campi chiave con i nomi ESATTI del tuo file
+    obj["Cod."] = code;
+    obj["Descrizione"] = desc;
+
+    // Giacenza gestita dal sito (se non esiste, 0)
+    obj["Giacenza"] = 0;
+
+    imported.push(obj);
   }
 
-  if (products.length === 0) {
-    throw new Error("Nessuna riga valida trovata. Servono almeno sku e name.");
+  if (imported.length === 0) {
+    throw new Error("Nessuna riga valida trovata (serve Cod. + Descrizione).");
   }
 
-  products.sort((a, b) => (a.name || "").localeCompare(b.name || "", "it"));
-
-  // Import = “catalogo ufficiale”: sostituiamo i prodotti,
-  // MA preserviamo le giacenze già inserite se lo SKU esiste.
+  // Preserva giacenze già inserite se re-importi lo stesso listino
   const old = loadProducts();
-  const oldMap = new Map(old.map(p => [p.sku, p]));
+  const oldMap = new Map(old.map(p => [norm(p["Cod."]), p]));
 
-  for (const p of products) {
-    const prev = oldMap.get(p.sku);
-    if (prev) {
-      // mantieni qty attuale (già lavorata dal sito) e aggiorna anagrafica
-      p.qty = toInt(prev.qty);
-    }
+  for (const p of imported) {
+    const prev = oldMap.get(norm(p["Cod."]));
+    if (prev) p["Giacenza"] = toInt(prev["Giacenza"]);
   }
 
-  saveProducts(products);
+  // Ordina per descrizione
+  imported.sort((a, b) => norm(a["Descrizione"]).localeCompare(norm(b["Descrizione"]), "it"));
 
-  // Se lo SKU selezionato non esiste più, deseleziona
-  if (selectedSku && !products.find(p => p.sku === selectedSku)) {
-    selectedSku = null;
+  saveProducts(imported);
+
+  // Se selezionato non esiste più, reset
+  if (selectedCode && !imported.find(p => norm(p["Cod."]) === norm(selectedCode))) {
+    selectedCode = null;
   }
 
-  setStatus(`Import OK: ${products.length} prodotti`);
+  setStatus(`Import OK: ${imported.length} prodotti`);
   renderList();
-  setSelected(selectedSku);
+  setSelected(selectedCode);
+  renderRecent();
 }
 
-/* ===== Salvataggio lotto/scadenza/quantità ===== */
+/* ===== Salva lotto/scadenza/quantità (carico) ===== */
 
 function saveEntry() {
-  const sku = normalizeSku(selectedSku);
-  if (!sku) return;
+  const code = norm(selectedCode);
+  if (!code) return;
 
-  const lot = normalizeText(lotIn.value);
-  const expiry = normalizeText(expIn.value); // yyyy-mm-dd (da input date)
+  const lot = norm(lotIn.value);
+  const expiry = norm(expIn.value); // yyyy-mm-dd
   const qty = toInt(qtyIn.value);
 
   if (!qty || qty <= 0) {
@@ -291,22 +317,19 @@ function saveEntry() {
     return;
   }
 
-  // aggiorna giacenza prodotto
   const products = loadProducts();
-  const idx = products.findIndex(p => p.sku === sku);
+  const idx = products.findIndex(p => norm(p["Cod."]) === code);
   if (idx < 0) {
-    alert("Prodotto non trovato (riprova con import).");
+    alert("Prodotto non trovato (ripeti import).");
     return;
   }
 
-  products[idx].qty = toInt(products[idx].qty) + qty;
-  products[idx].updated_at = new Date().toISOString();
+  products[idx]["Giacenza"] = toInt(products[idx]["Giacenza"]) + qty;
   saveProducts(products);
 
-  // salva riga lotto
   const lots = loadLots();
   lots.push({
-    sku,
+    code,
     lot: lot || "",
     expiry: expiry || "",
     qty,
@@ -314,59 +337,61 @@ function saveEntry() {
   });
   saveLots(lots);
 
-  // reset campi veloci per inserimento successivo
   lotIn.value = "";
   expIn.value = "";
   qtyIn.value = "";
 
-  // aggiorna UI
-  setSelected(sku);
+  setSelected(code);
   renderList();
   renderRecent();
+
   setStatus("Salvato ✔");
   setTimeout(() => setStatus(""), 1200);
 }
 
-/* ===== Export Excel (.xlsx) ===== */
+/* ===== Export Excel =====
+   - Foglio 1: stesso elenco prodotti con tutte le colonne originali + Giacenza in fondo
+   - Foglio 2: Lotti (storico)
+*/
 
 function exportExcel() {
   const products = loadProducts();
   if (products.length === 0) {
-    alert("Nessun prodotto da esportare. Importa prima un file .xlsx.");
+    alert("Nessun prodotto da esportare. Importa prima il file Excel.");
     return;
   }
 
   const lots = loadLots();
 
-  const sheetProducts = products.map(p => ({
-    sku: p.sku,
-    name: p.name,
-    qty: p.qty ?? 0,
-    location: p.location ?? "",
-    notes: p.notes ?? "",
-    updated_at: p.updated_at ?? "",
-  }));
+  // Determina ordine colonne: prendiamo le colonne originali dalla prima riga importata
+  // e mettiamo "Giacenza" in fondo (se non c’è già).
+  const first = products[0];
+  const baseCols = Object.keys(first).filter(k => k !== "Giacenza");
+  const cols = [...baseCols, "Giacenza"];
 
-  const sheetLots = lots.map(r => ({
-    sku: r.sku,
-    lot: r.lot ?? "",
-    expiry: r.expiry ?? "",
-    qty: r.qty ?? 0,
-    created_at: r.created_at ?? "",
+  // Ricostruisce righe rispettando ordine colonne
+  const prodRows = products.map(p => {
+    const out = {};
+    for (const c of cols) out[c] = p[c] ?? "";
+    return out;
+  });
+
+  const lotRows = lots.map(r => ({
+    "Cod.": r.code,
+    "Lotto": r.lot ?? "",
+    "Scadenza": r.expiry ?? "",
+    "Quantità": r.qty ?? 0,
+    "Data": r.created_at ?? "",
   }));
 
   const wb = XLSX.utils.book_new();
 
-  const ws1 = XLSX.utils.json_to_sheet(sheetProducts);
-  ws1["!cols"] = [
-    { wch: 14 }, { wch: 34 }, { wch: 10 }, { wch: 14 }, { wch: 28 }, { wch: 22 }
-  ];
+  const ws1 = XLSX.utils.json_to_sheet(prodRows, { header: cols });
+  ws1["!cols"] = cols.map(h => ({ wch: Math.min(40, Math.max(10, h.length + 2)) }));
   XLSX.utils.book_append_sheet(wb, ws1, "Prodotti");
 
-  const ws2 = XLSX.utils.json_to_sheet(sheetLots);
-  ws2["!cols"] = [
-    { wch: 14 }, { wch: 18 }, { wch: 12 }, { wch: 10 }, { wch: 22 }
-  ];
+  const ws2 = XLSX.utils.json_to_sheet(lotRows);
+  ws2["!cols"] = [{ wch: 14 }, { wch: 18 }, { wch: 12 }, { wch: 10 }, { wch: 22 }];
   XLSX.utils.book_append_sheet(wb, ws2, "Lotti");
 
   XLSX.writeFile(wb, "inventario_aggiornato.xlsx");
@@ -374,9 +399,11 @@ function exportExcel() {
 
 /* ===== Eventi ===== */
 
-btnImport.addEventListener("click", async () => {
+// Import automatico appena scegli il file (più comodo da telefono)
+fileInput.addEventListener("change", async () => {
   const file = fileInput.files?.[0];
-  if (!file) return alert("Seleziona un file Excel (.xlsx) e poi premi OK.");
+  if (!file) return;
+
   try {
     setStatus("Import in corso...");
     await importExcel(file);
@@ -389,32 +416,16 @@ btnImport.addEventListener("click", async () => {
 });
 
 btnExport.addEventListener("click", exportExcel);
-
-searchIn.addEventListener("input", () => {
-  renderList();
-});
-
-listEl.addEventListener("click", () => {
-  // niente: click gestito sui singoli item
-});
-
+searchIn.addEventListener("input", renderList);
 btnSave.addEventListener("click", saveEntry);
 
-// abilita/disabilita salva se selezionato
-function refreshSaveEnabled() {
-  btnSave.disabled = !normalizeSku(selectedSku);
-}
-setInterval(refreshSaveEnabled, 400); // leggerissimo, evita edge case UI
+// sicurezza: abilita salva solo se c’è selezione
+setInterval(() => { btnSave.disabled = !norm(selectedCode); }, 400);
 
 /* ===== Init ===== */
-
 (function init() {
   setStatus("");
   renderList();
   renderRecent();
   setSelected(null);
-
-  // se c'erano dati precedenti e solo 1 prodotto, selezionalo per comodità
-  const products = loadProducts();
-  if (products.length === 1) setSelected(products[0].sku);
 })();
