@@ -9,19 +9,24 @@ h2 { margin: 0 0 10px; font-size: 18px; }
 .between { justify-content: space-between; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+
 input, button { padding: 10px 12px; border-radius: 10px; border: 1px solid #d7dbe7; font-size: 14px; }
 input { flex: 1; min-width: 160px; background: #fff; }
 button { background: #111; color: #fff; border: 1px solid #111; cursor: pointer; }
 button:hover { opacity: .9; }
 button.danger { background: #b00020; border-color: #b00020; }
+
 .muted { color: #555; }
 .small { font-size: 12px; }
+
 .tableWrap { overflow: auto; border-radius: 12px; border: 1px solid #e7e9f2; }
 table { width: 100%; border-collapse: collapse; min-width: 860px; }
 th, td { padding: 10px 10px; border-bottom: 1px solid #eef0f7; vertical-align: top; }
 th { text-align: left; background: #fafbff; position: sticky; top: 0; }
 .num { text-align: right; white-space: nowrap; }
-.actions { display: flex; gap: 6px; }
+
+.actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .actions button { padding: 8px 10px; border-radius: 10px; }
 .actions .ghost { background: #fff; color: #111; border: 1px solid #d7dbe7; }
+
 .badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #eef0f7; }
