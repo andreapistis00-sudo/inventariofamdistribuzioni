@@ -10,7 +10,7 @@
   <div class="wrap">
     <header class="top">
       <h1>Inventario Magazzino</h1>
-      <p class="muted">Semplice, veloce, tutto su GitHub Pages. Dati salvati su questo browser.</p>
+      <p class="muted">Tutto su GitHub Pages. Import/Export Excel (.xlsx). Dati salvati su questo browser.</p>
     </header>
 
     <section class="card">
@@ -18,23 +18,27 @@
         <div>
           <h2>Import / Export Excel</h2>
           <div class="row">
-            <input id="file" type="file" accept=".csv,text/csv" />
-            <button id="btnImport">Importa CSV</button>
+            <input id="file" type="file" accept=".xlsx" />
+            <button id="btnImport">Importa .xlsx</button>
           </div>
           <div class="row">
-            <button id="btnExport">Esporta CSV</button>
+            <button id="btnExport">Esporta .xlsx</button>
             <button id="btnClear" class="danger">Svuota dati (solo questo browser)</button>
           </div>
           <p class="muted small">
-            Suggerimento: in Excel salva come <b>CSV</b>. Colonne: <code>sku,name,qty,location,notes</code>.
+            Formato Excel (prima riga intestazioni): <code>sku</code>, <code>name</code>, <code>qty</code>, <code>location</code>, <code>notes</code>.
+            Il file viene letto dal <b>primo foglio</b>.
+          </p>
+          <p class="muted small">
+            Nota: per evitare doppioni, <b>SKU è obbligatorio</b>.
           </p>
         </div>
 
         <div>
-          <h2>Aggiungi prodotto</h2>
+          <h2>Aggiungi / Aggiorna prodotto</h2>
           <div class="row">
-            <input id="sku" placeholder="SKU (codice)" />
-            <input id="name" placeholder="Nome prodotto" />
+            <input id="sku" placeholder="SKU (obbligatorio)" />
+            <input id="name" placeholder="Nome prodotto (obbligatorio)" />
           </div>
           <div class="row">
             <input id="qty" type="number" placeholder="Quantità" value="0" />
@@ -45,7 +49,7 @@
             <button id="btnAdd">Aggiungi / Aggiorna</button>
           </div>
           <p class="muted small">
-            Se lo SKU esiste già, aggiorna quel prodotto (es. cambia qty/posizione/nome).
+            Se lo SKU esiste già, il prodotto viene aggiornato (nome/qty/posizione/note).
           </p>
         </div>
       </div>
@@ -82,11 +86,14 @@
 
     <footer class="muted small">
       <p>
-        Nota: i dati sono salvati nel browser (LocalStorage). Se cambi dispositivo o cancelli dati del browser, spariscono.
+        I dati sono salvati nel browser (LocalStorage). Se cambi dispositivo o cancelli i dati del browser, spariscono.
+        Usa <b>Esporta .xlsx</b> per fare backup e condividere manualmente.
       </p>
     </footer>
   </div>
 
+  <!-- Libreria Excel (SheetJS) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.19.3/dist/xlsx.full.min.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
