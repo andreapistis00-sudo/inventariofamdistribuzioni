@@ -9,87 +9,89 @@
 <body>
   <div class="wrap">
     <header class="top">
-      <h1>Inventario Magazzino</h1>
-      <p class="muted">Tutto su GitHub Pages. Import/Export Excel (.xlsx). Dati salvati su questo browser.</p>
+      <div class="topRow">
+        <div>
+          <h1>Inventario</h1>
+          <p class="muted small">Mobile-first • Import prodotti .xlsx • Ricerca + lotto/scadenza/quantità • Export .xlsx</p>
+        </div>
+
+        <!-- Barra piccola Import/Export -->
+        <div class="ioBar">
+          <label class="fileBtn" for="file">Importa</label>
+          <input id="file" type="file" accept=".xlsx" />
+          <button id="btnImport" class="mini">OK</button>
+          <button id="btnExport" class="mini ghost">Export</button>
+        </div>
+      </div>
     </header>
 
     <section class="card">
-      <div class="grid2">
-        <div>
-          <h2>Import / Export Excel</h2>
-          <div class="row">
-            <input id="file" type="file" accept=".xlsx" />
-            <button id="btnImport">Importa .xlsx</button>
+      <div class="searchBlock">
+        <input id="search" class="search" placeholder="Cerca prodotto per SKU o nome..." />
+        <div class="stats">
+          <span id="count" class="muted small"></span>
+          <span id="status" class="muted small"></span>
+        </div>
+      </div>
+
+      <div class="layout">
+        <!-- Lista prodotti -->
+        <div class="listCard">
+          <div class="listHeader">
+            <h2>Prodotti</h2>
+            <p class="muted small">Tocca un prodotto per caricare lotto/scadenza/quantità</p>
           </div>
-          <div class="row">
-            <button id="btnExport">Esporta .xlsx</button>
-            <button id="btnClear" class="danger">Svuota dati (solo questo browser)</button>
-          </div>
-          <p class="muted small">
-            Formato Excel (prima riga intestazioni): <code>sku</code>, <code>name</code>, <code>qty</code>, <code>location</code>, <code>notes</code>.
-            Il file viene letto dal <b>primo foglio</b>.
-          </p>
-          <p class="muted small">
-            Nota: per evitare doppioni, <b>SKU è obbligatorio</b>.
-          </p>
+
+          <div id="list" class="list"></div>
         </div>
 
-        <div>
-          <h2>Aggiungi / Aggiorna prodotto</h2>
-          <div class="row">
-            <input id="sku" placeholder="SKU (obbligatorio)" />
-            <input id="name" placeholder="Nome prodotto (obbligatorio)" />
+        <!-- Pannello inserimento -->
+        <div class="formCard">
+          <h2>Carico prodotto</h2>
+          <p class="muted small" id="selectedHint">Seleziona un prodotto dalla lista.</p>
+
+          <div class="selected">
+            <div class="badge" id="selSku">—</div>
+            <div>
+              <div class="selName" id="selName">Nessun prodotto selezionato</div>
+              <div class="muted small">Giacenza: <b id="selQty">0</b></div>
+            </div>
           </div>
-          <div class="row">
-            <input id="qty" type="number" placeholder="Quantità" value="0" />
-            <input id="location" placeholder="Posizione (es. A1-03)" />
+
+          <div class="grid">
+            <div>
+              <label>Lotto</label>
+              <input id="lot" placeholder="es. L2026-01" />
+            </div>
+            <div>
+              <label>Scadenza</label>
+              <input id="exp" type="date" />
+            </div>
           </div>
-          <div class="row">
-            <input id="notes" placeholder="Note (opzionale)" />
-            <button id="btnAdd">Aggiungi / Aggiorna</button>
+
+          <div class="grid">
+            <div>
+              <label>Quantità (carico)</label>
+              <input id="qty" type="number" inputmode="numeric" placeholder="es. 10" />
+            </div>
+            <div>
+              <label>&nbsp;</label>
+              <button id="btnSave" class="primary" disabled>Salva</button>
+            </div>
           </div>
-          <p class="muted small">
-            Se lo SKU esiste già, il prodotto viene aggiornato (nome/qty/posizione/note).
-          </p>
+
+          <div class="muted small note">
+            Importa i prodotti da Excel con intestazioni: <code>sku</code>, <code>name</code>, <code>qty</code> (opzionale), <code>location</code>, <code>notes</code>.
+            Il sito non crea nuovi prodotti: solo quelli del file.
+          </div>
+
+          <div class="recentWrap">
+            <h3>Ultimi inserimenti</h3>
+            <div id="recent" class="recent"></div>
+          </div>
         </div>
       </div>
     </section>
-
-    <section class="card">
-      <div class="row between">
-        <div>
-          <h2>Prodotti</h2>
-          <p class="muted small" id="count"></p>
-        </div>
-        <div class="row">
-          <input id="search" placeholder="Cerca per SKU o nome..." />
-          <button id="btnReset">Reset</button>
-        </div>
-      </div>
-
-      <div class="tableWrap">
-        <table>
-          <thead>
-            <tr>
-              <th>SKU</th>
-              <th>Nome</th>
-              <th class="num">Q.tà</th>
-              <th>Posizione</th>
-              <th>Note</th>
-              <th>Azioni</th>
-            </tr>
-          </thead>
-          <tbody id="rows"></tbody>
-        </table>
-      </div>
-    </section>
-
-    <footer class="muted small">
-      <p>
-        I dati sono salvati nel browser (LocalStorage). Se cambi dispositivo o cancelli i dati del browser, spariscono.
-        Usa <b>Esporta .xlsx</b> per fare backup e condividere manualmente.
-      </p>
-    </footer>
   </div>
 
   <!-- Libreria Excel (SheetJS) -->
