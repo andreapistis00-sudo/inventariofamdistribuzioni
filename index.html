@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Inventario Magazzino</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <h1>Inventario Magazzino</h1>
+      <p class="muted">Semplice, veloce, tutto su GitHub Pages. Dati salvati su questo browser.</p>
+    </header>
+
+    <section class="card">
+      <div class="grid2">
+        <div>
+          <h2>Import / Export Excel</h2>
+          <div class="row">
+            <input id="file" type="file" accept=".csv,text/csv" />
+            <button id="btnImport">Importa CSV</button>
+          </div>
+          <div class="row">
+            <button id="btnExport">Esporta CSV</button>
+            <button id="btnClear" class="danger">Svuota dati (solo questo browser)</button>
+          </div>
+          <p class="muted small">
+            Suggerimento: in Excel salva come <b>CSV</b>. Colonne: <code>sku,name,qty,location,notes</code>.
+          </p>
+        </div>
+
+        <div>
+          <h2>Aggiungi prodotto</h2>
+          <div class="row">
+            <input id="sku" placeholder="SKU (codice)" />
+            <input id="name" placeholder="Nome prodotto" />
+          </div>
+          <div class="row">
+            <input id="qty" type="number" placeholder="Quantità" value="0" />
+            <input id="location" placeholder="Posizione (es. A1-03)" />
+          </div>
+          <div class="row">
+            <input id="notes" placeholder="Note (opzionale)" />
+            <button id="btnAdd">Aggiungi / Aggiorna</button>
+          </div>
+          <p class="muted small">
+            Se lo SKU esiste già, aggiorna quel prodotto (es. cambia qty/posizione/nome).
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="row between">
+        <div>
+          <h2>Prodotti</h2>
+          <p class="muted small" id="count"></p>
+        </div>
+        <div class="row">
+          <input id="search" placeholder="Cerca per SKU o nome..." />
+          <button id="btnReset">Reset</button>
+        </div>
+      </div>
+
+      <div class="tableWrap">
+        <table>
+          <thead>
+            <tr>
+              <th>SKU</th>
+              <th>Nome</th>
+              <th class="num">Q.tà</th>
+              <th>Posizione</th>
+              <th>Note</th>
+              <th>Azioni</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer class="muted small">
+      <p>
+        Nota: i dati sono salvati nel browser (LocalStorage). Se cambi dispositivo o cancelli dati del browser, spariscono.
+      </p>
+    </footer>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
