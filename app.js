@@ -1,49 +1,74 @@
-/* ===========================
-   Inventario Magazzino
-   - Import/Export Excel .xlsx
-   - Cerca prodotto
-   - Aggiungi/Aggiorna
-   - +1 / -1 / modifica / elimina
-   - Salva in LocalStorage
-   =========================== */
+/* =========================================================
+   Inventario (solo prodotti da file Excel .xlsx)
+   - Importa lista prodotti (.xlsx) -> crea/aggiorna catalogo
+   - NON permette di aggiungere nuovi prodotti dal sito
+   - Cerca prodotto -> seleziona -> inserisci lotto/scadenza/quantità
+   - Aggiorna giacenza (somma qty)
+   - Export .xlsx con 2 fogli:
+       1) Prodotti (giacenze aggiornate)
+       2) Lotti (inserimenti lotto/scadenza/qty/data)
+   - Mobile-first, dati salvati nel browser (LocalStorage)
+   ========================================================= */
 
-const STORAGE_KEY = "inventario_items_v1";
+const STORE_PRODUCTS = "inv_products_v1";
+const STORE_LOTS = "inv_lots_v1";
 
 const el = (id) => document.getElementById(id);
 
 const fileInput = el("file");
 const btnImport = el("btnImport");
 const btnExport = el("btnExport");
-const btnClear = el("btnClear");
-
-const skuIn = el("sku");
-const nameIn = el("name");
-const qtyIn = el("qty");
-const locationIn = el("location");
-const notesIn = el("notes");
-const btnAdd = el("btnAdd");
 
 const searchIn = el("search");
-const btnReset = el("btnReset");
-
-const rows = el("rows");
 const count = el("count");
+const statusEl = el("status");
+
+const listEl = el("list");
+
+const selSkuEl = el("selSku");
+const selNameEl = el("selName");
+const selQtyEl = el("selQty");
+const selectedHint = el("selectedHint");
+
+const lotIn = el("lot");
+const expIn = el("exp");
+const qtyIn = el("qty");
+const btnSave = el("btnSave");
+
+const recentEl = el("recent");
+
+let selectedSku = null;
 
 /* ===== Storage ===== */
 
-function loadItems() {
+function loadJSON(key, fallback) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
     const data = JSON.parse(raw);
-    return Array.isArray(data) ? data : [];
+    return data ?? fallback;
   } catch {
-    return [];
+    return fallback;
   }
 }
+function saveJSON(key, data) {
+  localStorage.setItem(key, JSON.stringify(data));
+}
 
-function saveItems(items) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+function loadProducts() {
+  const arr = loadJSON(STORE_PRODUCTS, []);
+  return Array.isArray(arr) ? arr : [];
+}
+function saveProducts(products) {
+  saveJSON(STORE_PRODUCTS, products);
+}
+
+function loadLots() {
+  const arr = loadJSON(STORE_LOTS, []);
+  return Array.isArray(arr) ? arr : [];
+}
+function saveLots(lots) {
+  saveJSON(STORE_LOTS, lots);
 }
 
 /* ===== Utils ===== */
@@ -59,6 +84,9 @@ function toInt(n) {
   if (!Number.isFinite(x)) return 0;
   return Math.trunc(x);
 }
+function fmtDateISO(d) {
+  try { return new Date(d).toISOString(); } catch { return new Date().toISOString(); }
+}
 function escapeHtml(s) {
   return String(s)
     .replaceAll("&", "&amp;")
@@ -68,279 +96,325 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
-/* ===== Render ===== */
+/* ===== UI ===== */
 
-function render() {
-  const items = loadItems();
+function setStatus(msg) {
+  statusEl.textContent = msg || "";
+}
+
+function setSelected(sku) {
+  selectedSku = sku;
+  const products = loadProducts();
+  const p = products.find(x => normalizeSku(x.sku) === normalizeSku(sku)) || null;
+
+  if (!p) {
+    selSkuEl.textContent = "—";
+    selNameEl.textContent = "Nessun prodotto selezionato";
+    selQtyEl.textContent = "0";
+    selectedHint.textContent = "Seleziona un prodotto dalla lista.";
+    btnSave.disabled = true;
+    return;
+  }
+
+  selSkuEl.textContent = p.sku;
+  selNameEl.textContent = p.name;
+  selQtyEl.textContent = String(p.qty ?? 0);
+  selectedHint.textContent = "Compila lotto, scadenza e quantità, poi salva.";
+  btnSave.disabled = false;
+
+  // evidenzia selezionato
+  for (const node of listEl.querySelectorAll(".item")) {
+    node.classList.toggle("selected", node.dataset.sku === p.sku);
+  }
+}
+
+function renderList() {
+  const products = loadProducts();
   const q = normalizeText(searchIn.value).toLowerCase();
 
   const filtered = q
-    ? items.filter((it) =>
-        (it.sku || "").toLowerCase().includes(q) ||
-        (it.name || "").toLowerCase().includes(q)
+    ? products.filter(p =>
+        (p.sku || "").toLowerCase().includes(q) ||
+        (p.name || "").toLowerCase().includes(q)
       )
-    : items;
+    : products;
 
-  count.textContent = `${filtered.length} prodotti (totale: ${items.length})`;
+  count.textContent = products.length
+    ? `${filtered.length} risultati (totale prodotti: ${products.length})`
+    : `Nessun prodotto caricato. Importa un file .xlsx`;
 
-  rows.innerHTML = "";
+  listEl.innerHTML = "";
+
   if (filtered.length === 0) {
-    rows.innerHTML = `<tr><td colspan="6" class="muted">Nessun prodotto.</td></tr>`;
+    listEl.innerHTML = `
+      <div class="muted small" style="padding:10px;">
+        ${products.length ? "Nessun risultato." : "Importa un Excel per vedere i prodotti."}
+      </div>`;
     return;
   }
 
-  for (const it of filtered) {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td><span class="badge">${escapeHtml(it.sku || "-")}</span></td>
-      <td>${escapeHtml(it.name || "")}</td>
-      <td class="num">${it.qty ?? 0}</td>
-      <td>${escapeHtml(it.location || "")}</td>
-      <td>${escapeHtml(it.notes || "")}</td>
-      <td>
-        <div class="actions">
-          <button class="ghost" data-act="dec" data-sku="${escapeHtml(it.sku)}">-1</button>
-          <button class="ghost" data-act="inc" data-sku="${escapeHtml(it.sku)}">+1</button>
-          <button class="ghost" data-act="edit" data-sku="${escapeHtml(it.sku)}">Modifica</button>
-          <button class="danger" data-act="del" data-sku="${escapeHtml(it.sku)}">Elimina</button>
+  for (const p of filtered) {
+    const div = document.createElement("div");
+    div.className = "item" + (selectedSku === p.sku ? " selected" : "");
+    div.dataset.sku = p.sku;
+
+    div.innerHTML = `
+      <div class="badge">${escapeHtml(p.sku)}</div>
+      <div>
+        <div class="itemTitle">${escapeHtml(p.name)}</div>
+        <div class="itemMeta">
+          <span>Giacenza: <b>${p.qty ?? 0}</b></span>
+          ${p.location ? `<span>Pos: ${escapeHtml(p.location)}</span>` : ""}
         </div>
-      </td>
+      </div>
     `;
-    rows.appendChild(tr);
+
+    div.addEventListener("click", () => setSelected(p.sku));
+    listEl.appendChild(div);
   }
 }
 
-/* ===== CRUD ===== */
+function renderRecent() {
+  const lots = loadLots();
+  const products = loadProducts();
+  const mapName = new Map(products.map(p => [p.sku, p.name]));
 
-function upsertItem(newItem) {
-  const items = loadItems();
+  const last = lots.slice(-8).reverse();
+  recentEl.innerHTML = "";
 
-  const sku = normalizeSku(newItem.sku);
-  if (!sku) {
-    alert("SKU obbligatorio (serve per riconoscere univocamente il prodotto).");
+  if (last.length === 0) {
+    recentEl.innerHTML = `<div class="muted small">Nessun inserimento ancora.</div>`;
     return;
   }
 
-  const name = normalizeText(newItem.name);
-  if (!name) {
-    alert("Nome prodotto obbligatorio.");
-    return;
+  for (const r of last) {
+    const div = document.createElement("div");
+    div.className = "recentRow";
+    const name = mapName.get(r.sku) || "";
+    const exp = r.expiry ? r.expiry : "—";
+    div.innerHTML = `
+      <div><b>${escapeHtml(r.sku)}</b> ${escapeHtml(name)}</div>
+      <div class="muted small">Lotto: ${escapeHtml(r.lot || "—")} • Scad: ${escapeHtml(exp)} • Qty: <b>${r.qty}</b></div>
+    `;
+    recentEl.appendChild(div);
   }
-
-  const idx = items.findIndex((it) => normalizeSku(it.sku) === sku);
-
-  const payload = {
-    sku,
-    name,
-    qty: toInt(newItem.qty),
-    location: normalizeText(newItem.location),
-    notes: normalizeText(newItem.notes),
-    updated_at: new Date().toISOString(),
-  };
-
-  if (idx >= 0) items[idx] = { ...items[idx], ...payload };
-  else items.push(payload);
-
-  items.sort((a, b) => (a.name || "").localeCompare(b.name || "", "it"));
-  saveItems(items);
-  render();
 }
 
-function changeQty(sku, delta) {
-  const items = loadItems();
-  const idx = items.findIndex((it) => normalizeSku(it.sku) === normalizeSku(sku));
-  if (idx < 0) return;
-
-  const current = toInt(items[idx].qty);
-  const next = current + delta;
-  if (next < 0) return;
-
-  items[idx].qty = next;
-  items[idx].updated_at = new Date().toISOString();
-  saveItems(items);
-  render();
-}
-
-function deleteItem(sku) {
-  const items = loadItems();
-  const next = items.filter((it) => normalizeSku(it.sku) !== normalizeSku(sku));
-  saveItems(next);
-  render();
-}
-
-function editItemPrompt(sku) {
-  const items = loadItems();
-  const it = items.find((x) => normalizeSku(x.sku) === normalizeSku(sku));
-  if (!it) return;
-
-  const name = prompt("Nome prodotto:", it.name ?? "");
-  if (name === null) return;
-
-  const qty = prompt("Quantità:", String(it.qty ?? 0));
-  if (qty === null) return;
-
-  const location = prompt("Posizione:", it.location ?? "");
-  if (location === null) return;
-
-  const notes = prompt("Note:", it.notes ?? "");
-  if (notes === null) return;
-
-  upsertItem({ sku: it.sku, name, qty, location, notes });
-}
-
-/* ===== Excel Import/Export (.xlsx) =====
-   Richiede SheetJS (xlsx.full.min.js) caricato in index.html
+/* ===== Import Excel (.xlsx) =====
+   Atteso: intestazioni nel primo foglio
+   sku, name, qty (opzionale), location (opzionale), notes (opzionale)
 */
 
-async function importExcelFile(file) {
-  try {
-    const data = await file.arrayBuffer();
-    const workbook = XLSX.read(data, { type: "array" });
+async function importExcel(file) {
+  const data = await file.arrayBuffer();
+  const workbook = XLSX.read(data, { type: "array" });
 
-    const sheetName = workbook.SheetNames[0];
-    if (!sheetName) {
-      alert("Nessun foglio trovato nel file Excel.");
-      return;
-    }
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) throw new Error("Nessun foglio trovato.");
 
-    const sheet = workbook.Sheets[sheetName];
-    const excelRows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+  const sheet = workbook.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
-    if (!excelRows.length) {
-      alert("File Excel vuoto.");
-      return;
-    }
+  if (!rows.length) throw new Error("File Excel vuoto.");
 
-    // Normalizza intestazioni attese: sku, name, qty, location, notes
-    // sheet_to_json restituisce oggetti basati sulle intestazioni (case sensitive),
-    // quindi gestiamo varianti possibili (SKU, Name, ecc.)
-    const pick = (obj, key) => {
-      const keys = Object.keys(obj);
-      const found = keys.find(k => k.trim().toLowerCase() === key);
-      return found ? obj[found] : "";
-    };
+  // Supporta intestazioni con maiuscole/minuscole diverse
+  const pick = (obj, key) => {
+    const keys = Object.keys(obj);
+    const found = keys.find(k => k.trim().toLowerCase() === key);
+    return found ? obj[found] : "";
+  };
 
-    const items = loadItems();
-    const bySku = new Map(items.map((it) => [normalizeSku(it.sku), it]));
+  const products = [];
+  const seen = new Set();
 
-    let imported = 0;
-    let updated = 0;
+  for (const r of rows) {
+    const sku = normalizeSku(pick(r, "sku"));
+    const name = normalizeText(pick(r, "name"));
+    if (!sku || !name) continue;
 
-    for (const r of excelRows) {
-      const sku = normalizeSku(pick(r, "sku"));
-      const name = normalizeText(pick(r, "name"));
-      if (!sku || !name) continue;
+    if (seen.has(sku)) continue;
+    seen.add(sku);
 
-      const payload = {
-        sku,
-        name,
-        qty: toInt(pick(r, "qty")),
-        location: normalizeText(pick(r, "location")),
-        notes: normalizeText(pick(r, "notes")),
-        updated_at: new Date().toISOString(),
-      };
-
-      const existing = bySku.get(sku);
-      if (existing) {
-        Object.assign(existing, payload);
-        updated++;
-      } else {
-        items.push(payload);
-        bySku.set(sku, payload);
-        imported++;
-      }
-    }
-
-    items.sort((a, b) => (a.name || "").localeCompare(b.name || "", "it"));
-    saveItems(items);
-    render();
-
-    alert(`Import completato.\nNuovi: ${imported}\nAggiornati: ${updated}`);
-  } catch (err) {
-    alert("Errore durante l'import: " + (err?.message || String(err)));
+    products.push({
+      sku,
+      name,
+      qty: toInt(pick(r, "qty")),           // se assente -> 0
+      location: normalizeText(pick(r, "location")),
+      notes: normalizeText(pick(r, "notes")),
+      updated_at: new Date().toISOString(),
+    });
   }
+
+  if (products.length === 0) {
+    throw new Error("Nessuna riga valida trovata. Servono almeno sku e name.");
+  }
+
+  products.sort((a, b) => (a.name || "").localeCompare(b.name || "", "it"));
+
+  // Import = “catalogo ufficiale”: sostituiamo i prodotti,
+  // MA preserviamo le giacenze già inserite se lo SKU esiste.
+  const old = loadProducts();
+  const oldMap = new Map(old.map(p => [p.sku, p]));
+
+  for (const p of products) {
+    const prev = oldMap.get(p.sku);
+    if (prev) {
+      // mantieni qty attuale (già lavorata dal sito) e aggiorna anagrafica
+      p.qty = toInt(prev.qty);
+    }
+  }
+
+  saveProducts(products);
+
+  // Se lo SKU selezionato non esiste più, deseleziona
+  if (selectedSku && !products.find(p => p.sku === selectedSku)) {
+    selectedSku = null;
+  }
+
+  setStatus(`Import OK: ${products.length} prodotti`);
+  renderList();
+  setSelected(selectedSku);
 }
+
+/* ===== Salvataggio lotto/scadenza/quantità ===== */
+
+function saveEntry() {
+  const sku = normalizeSku(selectedSku);
+  if (!sku) return;
+
+  const lot = normalizeText(lotIn.value);
+  const expiry = normalizeText(expIn.value); // yyyy-mm-dd (da input date)
+  const qty = toInt(qtyIn.value);
+
+  if (!qty || qty <= 0) {
+    alert("Inserisci una quantità > 0.");
+    return;
+  }
+
+  // aggiorna giacenza prodotto
+  const products = loadProducts();
+  const idx = products.findIndex(p => p.sku === sku);
+  if (idx < 0) {
+    alert("Prodotto non trovato (riprova con import).");
+    return;
+  }
+
+  products[idx].qty = toInt(products[idx].qty) + qty;
+  products[idx].updated_at = new Date().toISOString();
+  saveProducts(products);
+
+  // salva riga lotto
+  const lots = loadLots();
+  lots.push({
+    sku,
+    lot: lot || "",
+    expiry: expiry || "",
+    qty,
+    created_at: new Date().toISOString(),
+  });
+  saveLots(lots);
+
+  // reset campi veloci per inserimento successivo
+  lotIn.value = "";
+  expIn.value = "";
+  qtyIn.value = "";
+
+  // aggiorna UI
+  setSelected(sku);
+  renderList();
+  renderRecent();
+  setStatus("Salvato ✔");
+  setTimeout(() => setStatus(""), 1200);
+}
+
+/* ===== Export Excel (.xlsx) ===== */
 
 function exportExcel() {
-  try {
-    const items = loadItems();
-
-    const data = items.map((it) => ({
-      sku: it.sku,
-      name: it.name,
-      qty: it.qty ?? 0,
-      location: it.location ?? "",
-      notes: it.notes ?? "",
-      updated_at: it.updated_at ?? "",
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(data);
-
-    // Piccolo miglioramento: larghezza colonne (facoltativo)
-    worksheet["!cols"] = [
-      { wch: 14 }, // sku
-      { wch: 32 }, // name
-      { wch: 8 },  // qty
-      { wch: 14 }, // location
-      { wch: 30 }, // notes
-      { wch: 22 }, // updated_at
-    ];
-
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Inventario");
-
-    XLSX.writeFile(workbook, "inventario.xlsx");
-  } catch (err) {
-    alert("Errore durante l'export: " + (err?.message || String(err)));
+  const products = loadProducts();
+  if (products.length === 0) {
+    alert("Nessun prodotto da esportare. Importa prima un file .xlsx.");
+    return;
   }
+
+  const lots = loadLots();
+
+  const sheetProducts = products.map(p => ({
+    sku: p.sku,
+    name: p.name,
+    qty: p.qty ?? 0,
+    location: p.location ?? "",
+    notes: p.notes ?? "",
+    updated_at: p.updated_at ?? "",
+  }));
+
+  const sheetLots = lots.map(r => ({
+    sku: r.sku,
+    lot: r.lot ?? "",
+    expiry: r.expiry ?? "",
+    qty: r.qty ?? 0,
+    created_at: r.created_at ?? "",
+  }));
+
+  const wb = XLSX.utils.book_new();
+
+  const ws1 = XLSX.utils.json_to_sheet(sheetProducts);
+  ws1["!cols"] = [
+    { wch: 14 }, { wch: 34 }, { wch: 10 }, { wch: 14 }, { wch: 28 }, { wch: 22 }
+  ];
+  XLSX.utils.book_append_sheet(wb, ws1, "Prodotti");
+
+  const ws2 = XLSX.utils.json_to_sheet(sheetLots);
+  ws2["!cols"] = [
+    { wch: 14 }, { wch: 18 }, { wch: 12 }, { wch: 10 }, { wch: 22 }
+  ];
+  XLSX.utils.book_append_sheet(wb, ws2, "Lotti");
+
+  XLSX.writeFile(wb, "inventario_aggiornato.xlsx");
 }
 
-/* ===== Eventi UI ===== */
-
-btnAdd.addEventListener("click", () => {
-  upsertItem({
-    sku: skuIn.value,
-    name: nameIn.value,
-    qty: qtyIn.value,
-    location: locationIn.value,
-    notes: notesIn.value,
-  });
-});
-
-rows.addEventListener("click", (e) => {
-  const btn = e.target.closest("button");
-  if (!btn) return;
-  const act = btn.dataset.act;
-  const sku = btn.dataset.sku;
-
-  if (act === "inc") changeQty(sku, +1);
-  if (act === "dec") changeQty(sku, -1);
-  if (act === "edit") editItemPrompt(sku);
-  if (act === "del") {
-    if (confirm(`Eliminare il prodotto ${sku}?`)) deleteItem(sku);
-  }
-});
+/* ===== Eventi ===== */
 
 btnImport.addEventListener("click", async () => {
   const file = fileInput.files?.[0];
-  if (!file) return alert("Seleziona un file Excel (.xlsx) prima di importare.");
-  await importExcelFile(file);
-  fileInput.value = "";
+  if (!file) return alert("Seleziona un file Excel (.xlsx) e poi premi OK.");
+  try {
+    setStatus("Import in corso...");
+    await importExcel(file);
+  } catch (e) {
+    alert("Errore import: " + (e?.message || String(e)));
+    setStatus("");
+  } finally {
+    fileInput.value = "";
+  }
 });
 
 btnExport.addEventListener("click", exportExcel);
 
-btnClear.addEventListener("click", () => {
-  if (!confirm("Sicuro? Cancella tutti i dati salvati su questo browser.")) return;
-  localStorage.removeItem(STORAGE_KEY);
-  render();
+searchIn.addEventListener("input", () => {
+  renderList();
 });
 
-searchIn.addEventListener("input", render);
-
-btnReset.addEventListener("click", () => {
-  searchIn.value = "";
-  render();
+listEl.addEventListener("click", () => {
+  // niente: click gestito sui singoli item
 });
 
-render();
+btnSave.addEventListener("click", saveEntry);
+
+// abilita/disabilita salva se selezionato
+function refreshSaveEnabled() {
+  btnSave.disabled = !normalizeSku(selectedSku);
+}
+setInterval(refreshSaveEnabled, 400); // leggerissimo, evita edge case UI
+
+/* ===== Init ===== */
+
+(function init() {
+  setStatus("");
+  renderList();
+  renderRecent();
+  setSelected(null);
+
+  // se c'erano dati precedenti e solo 1 prodotto, selezionalo per comodità
+  const products = loadProducts();
+  if (products.length === 1) setSelected(products[0].sku);
+})();
