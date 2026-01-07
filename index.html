@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Inventario Magazzino</title>
+  <title>Inventario</title>
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
@@ -12,14 +12,15 @@
       <div class="topRow">
         <div>
           <h1>Inventario</h1>
-          <p class="muted small">Mobile-first • Import prodotti .xlsx • Ricerca + lotto/scadenza/quantità • Export .xlsx</p>
+          <p class="muted small">
+            Importa il tuo Excel così com’è • Cerca per Cod. o Descrizione • Inserisci lotto/scadenza/quantità • Export con giacenze
+          </p>
         </div>
 
-        <!-- Barra piccola Import/Export -->
+        <!-- Import/Export (piccolo, usato poco) -->
         <div class="ioBar">
           <label class="fileBtn" for="file">Importa</label>
-          <input id="file" type="file" accept=".xlsx" />
-          <button id="btnImport" class="mini">OK</button>
+          <input id="file" type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" />
           <button id="btnExport" class="mini ghost">Export</button>
         </div>
       </div>
@@ -27,7 +28,7 @@
 
     <section class="card">
       <div class="searchBlock">
-        <input id="search" class="search" placeholder="Cerca prodotto per SKU o nome..." />
+        <input id="search" class="search" placeholder="Cerca per Cod. o Descrizione..." />
         <div class="stats">
           <span id="count" class="muted small"></span>
           <span id="status" class="muted small"></span>
@@ -41,20 +42,22 @@
             <h2>Prodotti</h2>
             <p class="muted small">Tocca un prodotto per caricare lotto/scadenza/quantità</p>
           </div>
-
           <div id="list" class="list"></div>
         </div>
 
-        <!-- Pannello inserimento -->
+        <!-- Inserimento -->
         <div class="formCard">
           <h2>Carico prodotto</h2>
           <p class="muted small" id="selectedHint">Seleziona un prodotto dalla lista.</p>
 
           <div class="selected">
-            <div class="badge" id="selSku">—</div>
+            <div class="badge" id="selCode">—</div>
             <div>
-              <div class="selName" id="selName">Nessun prodotto selezionato</div>
-              <div class="muted small">Giacenza: <b id="selQty">0</b></div>
+              <div class="selName" id="selDesc">Nessun prodotto selezionato</div>
+              <div class="muted small">
+                Giacenza: <b id="selStock">0</b>
+                <span id="selUm" class="muted small"></span>
+              </div>
             </div>
           </div>
 
@@ -81,8 +84,8 @@
           </div>
 
           <div class="muted small note">
-            Importa i prodotti da Excel con intestazioni: <code>sku</code>, <code>name</code>, <code>qty</code> (opzionale), <code>location</code>, <code>notes</code>.
-            Il sito non crea nuovi prodotti: solo quelli del file.
+            Il file Excel resta uguale: usiamo le colonne <code>Cod.</code> e <code>Descrizione</code>.
+            L’export aggiunge solo <code>Giacenza</code> in fondo + foglio <code>Lotti</code>.
           </div>
 
           <div class="recentWrap">
@@ -94,7 +97,7 @@
     </section>
   </div>
 
-  <!-- Libreria Excel (SheetJS) -->
+  <!-- SheetJS -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.19.3/dist/xlsx.full.min.js"></script>
   <script src="./app.js"></script>
 </body>
