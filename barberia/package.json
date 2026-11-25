@@ -1,0 +1,12 @@
+{
+  "name": "barberia-prenotazioni",
+  "version": "1.0.0",
+  "description": "Gestione prenotazioni per barberia: 2 postazioni, coda, taglio settimanale automatico",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js"
+  }
+}
