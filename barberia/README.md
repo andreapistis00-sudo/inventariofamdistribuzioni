@@ -47,3 +47,14 @@ src/auth.js        hash password e token di sessione
 public/            interfaccia web (HTML/CSS/JS, responsive per smartphone)
 test/              test delle regole (node --test)
 ```
+
+## Demo senza server
+
+```bash
+npm install          # solo per esbuild (strumento di build)
+npm run demo         # crea demo/dist/barberia-demo.html
+```
+
+La demo è un unico file HTML: le API girano nel browser con lo stesso codice del server
+(`src/routes.js`, `src/logic.js`) su un database SQLite in memoria (sql.js), salvato nel browser.
+Serve solo per provare l'app: ogni visitatore vede i propri dati.

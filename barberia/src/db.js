@@ -141,7 +141,7 @@ export function openDb(file = 'barberia.db') {
 
   const admin = db.prepare("SELECT id FROM users WHERE role = 'admin'").get();
   if (!admin) {
-    const pwd = process.env.ADMIN_PASSWORD || 'admin123';
+    const pwd = (typeof process !== 'undefined' && process.env?.ADMIN_PASSWORD) || 'admin123';
     db.prepare(
       "INSERT INTO users(name, phone, password_hash, role, created_at) VALUES (?, ?, ?, 'admin', ?)"
     ).run('Gestore', 'admin', hashPassword(pwd), Date.now());

@@ -1,6 +1,6 @@
 // Regole di business della barberia.
 // Tutte le date sono stringhe "YYYY-MM-DD" e gli orari "HH:MM" nell'ora locale del negozio.
-process.env.TZ = process.env.BARBER_TZ || 'Europe/Rome';
+if (typeof process !== 'undefined' && process.env) process.env.TZ = process.env.BARBER_TZ || 'Europe/Rome';
 
 export class AppError extends Error {
   constructor(status, message) {
